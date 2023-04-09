@@ -1,0 +1,111 @@
+---
+- name: Setup wireguard client
+  hosts: localhost
+  connection: local
+  remote_user: mario
+  become: yes
+  become_user: root
+  vars:
+    ansible_python_interpreter: "/usr/bin/env python"
+  tasks:
+    - name: Include vault
+      ansible.builtin.include_vars:
+        file: ./vault.yaml
+
+    - name: Install wireguard package
+      # apt if ubuntu
+      ansible.builtin.dnf:
+        name: wireguard
+        state: present
+        update_cache: true
+
+    - name: Generate private key
+      ansible.builtin.shell:
+        cmd: umask 077 && wg genkey | tee privatekey | wg pubkey > publickey
+        chdir: /etc/wireguard
+        creates: /etc/wireguard/publickey
+
+    - name: Get public key
+      ansible.builtin.command: cat /etc/wireguard/publickey
+      register: publickey_contents
+      changed_when: false
+
+    - name: Set public key fact
+      ansible.builtin.set_fact:
+        pubkey: "{{ publickey_contents.stdout }}"
+
+    - name: Create client wireguard config
+      ansible.builtin.template:
+        dest: /etc/wireguard/{{ host_name }}.conf
+        src: wireguard_client.conf.j2
+        owner: root
+        group: root
+        mode: '0600'
+      vars:
+        host: "{{ hostvars[item]['ansible_host'] }}"
+        host_name: "{{ hostvars[item]['inventory_hostname'] }}"
+      loop: "{{ groups['vpn'] }}"
+
+
+- name: Setup wireguard server
+  hosts: vpn
+  remote_user: mario 
+  become: yes
+  tasks:
+    - name: Include vault
+      ansible.builtin.include_vars:
+        file: ./vault.yaml
+
+    # https://docs.ansible.com/ansible/latest/collections/ansible/builtin/apt_module.html
+    - name: Install wireguard package
+      ansible.builtin.apt:
+        name: wireguard
+        state: present
+        update_cache: true
+
+    # https://docs.ansible.com/ansible/latest/collections/ansible/builtin/copy_module.html
+    - name: Create server wireguard config
+      ansible.builtin.template:
+        dest: /etc/wireguard/wg0.conf
+        src: wireguard_server.conf.j2
+        owner: root
+        group: root
+        mode: '0600'
+      notify: Reload wireguard config
+
+    # https://docs.ansible.com/ansible/latest/collections/ansible/posix/sysctl_module.html
+    - name: Enable and persist ip forwarding
+      ansible.posix.sysctl:
+        name: net.ipv4.ip_forward
+        value: "1"
+        state: present
+        sysctl_set: true
+        reload: true
+
+    # https://docs.ansible.com/ansible/latest/collections/ansible/builtin/systemd_module.html
+    - name: Start wireguard and enable on boot
+      ansible.builtin.systemd:
+        name: wg-quick@wg0.service
+        enabled: true
+        state: started
+
+    - name: Open firewall port
+      ufw:
+        rule: allow
+        port: 51820
+        proto: udp
+      notify:
+        - Reload ufw
+
+
+  handlers:
+  # Reloads config without disrupting current peer sessions, but does not
+  # re-run PostUp commands. Notify this handler on server config changes.
+    - name: Reload wireguard config
+      ansible.builtin.shell: wg syncconf wg0 <(wg-quick strip wg0)
+      args:
+        executable: /bin/bash
+
+    - name: Reload ufw
+      ufw:
+        state: reloaded

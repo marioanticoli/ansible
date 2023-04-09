@@ -1,0 +1,19 @@
+---
+- name: Ansible setup ssh
+  hosts: all
+  remote_user: mario
+  become: yes
+  tasks:
+    - name: "Configure sshd"
+      ansible.builtin.include_role:
+        name: willshersystems.sshd
+      vars:
+        sshd:
+          PasswordAuthentication: "no"
+          # remember to enable pubkey login for non-root user
+          PermitRootLogin: "no"
+          PermitEmptyPasswords: "no"
+          Protocol: 2
+          ClientAliveInterval: 200
+          MaxAuthTries: 3
+          X11Forwarding: "no"

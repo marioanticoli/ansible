@@ -1,0 +1,15 @@
+# {{ ansible_managed }}
+[Interface]
+# The address your computer will use on the VPN
+Address = 10.0.0.8/32
+DNS = 1.1.1.1
+# Load your privatekey from file
+PostUp = wg set %i private-key /etc/wireguard/privatekey
+# Also ping the vpn server to ensure the tunnel is initialized
+PostUp = ping -c1 10.0.0.1
+
+[Peer]
+PublicKey = {{ wg_server_pubkey }}
+Endpoint = {{ host }}:51820
+AllowedIPs = 0.0.0.0/0
+PersistentKeepalive = 25

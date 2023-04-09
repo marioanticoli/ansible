@@ -1,0 +1,22 @@
+---
+- name: Ansible setup user
+  hosts: all
+  remote_user: root
+  tasks:
+    - name: Include vault
+      include_vars:
+        file: ./vault.yaml
+
+    - name: Add the user
+      user:
+        name: "{{ username }}"
+        append: true
+        groups: "sudo"
+        password: "{{ password | password_hash('sha512', salt) }}"
+        shell: "/usr/bin/bash"
+
+    - name: Copy ssh key
+      authorized_key:
+        user: "{{ username }}"
+        state: present
+        key: "{{ public_key }}"

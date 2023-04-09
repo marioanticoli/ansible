@@ -1,0 +1,44 @@
+---
+- name: Ansible ufw setup
+  hosts: all
+  remote_user: mario
+  become: yes
+  tasks:
+    - name: Ensure ufw installed
+      apt:
+        name: ufw
+        state: present
+        update_cache: true
+
+    - name: Ufw deny incoming
+      ufw:
+        direction: incoming
+        proto: any
+        policy: deny
+      notify:
+        - Reload ufw
+
+    - name: Ufw allow outgoing
+      ufw:
+        direction: outgoing
+        proto: any
+        policy: allow
+      notify:
+        - Reload ufw
+
+    - name: Ufw allow ssh
+      ufw:
+        rule: allow
+        name: OpenSSH
+      notify:
+        - Reload ufw
+
+    - name: Enable ufw service
+      ufw:
+        state: enabled
+
+
+  handlers:
+    - name: Reload ufw
+      ufw:
+        state: reloaded
