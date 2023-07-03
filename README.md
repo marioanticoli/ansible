@@ -26,6 +26,12 @@ ansible_python_interpreter=/usr/bin/python3
 
 ## Commands
 
+Edit vault 
+
+```
+ansible-vault edit vault.yaml
+```
+
 Show inventory
 
 ```
